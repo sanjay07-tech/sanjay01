@@ -1,1 +1,93 @@
-hello
+// ================= FULL IPL AUCTION WEB APP ================= // Backend + Frontend + Players JSON
+
+// ================= 1. server.js =================
+
+const express = require('express'); const http = require('http'); const { Server } = require('socket.io'); const fs = require('fs');
+
+const app = express(); const server = http.createServer(app); const io = new Server(server);
+
+app.use(express.static('public'));
+
+// Teams let teams = { CSK: 100, MI: 100, RCB: 100, KKR: 100, SRH: 100, DC: 100, PBKS: 100, RR: 100, GT: 100, LSG: 100 };
+
+// Load players from JSON let players = JSON.parse(fs.readFileSync('players.json')); let index = 0;
+
+function getNextPlayer() { if (index >= players.length) index = 0; let p = players[index++]; return { name: p.name, role: p.role, country: p.country, basePrice: p.base, currentBid: p.base, highestBidder: null }; }
+
+let currentPlayer = getNextPlayer();
+
+io.on('connection', (socket) => { socket.emit('update', { teams, currentPlayer });
+
+socket.on('bid', (team) => { if (teams[team] >= currentPlayer.currentBid + 0.2) { currentPlayer.currentBid += 0.2; currentPlayer.highestBidder = team; io.emit('update', { teams, currentPlayer }); } });
+
+socket.on('sell', () => { if (currentPlayer.highestBidder) { teams[currentPlayer.highestBidder] -= currentPlayer.currentBid; } currentPlayer = getNextPlayer(); io.emit('update', { teams, currentPlayer }); }); });
+
+server.listen(3000, () => console.log('Server running on port 3000'));
+
+// ================= 2. public/index.html =================
+
+<!DOCTYPE html><html>
+<head>
+  <title>IPL Auction</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: Arial; text-align: center; }
+    button { margin: 5px; padding: 10px; }
+  </style>
+</head>
+<body><h1>🏏 IPL Auction 2026</h1><h2 id="player"></h2>
+<h3 id="role"></h3>
+<h3 id="bid"></h3>
+<h3 id="team"></h3><div id="buttons"></div><button onclick="sell()">Sell Player</button>
+
+<h2>Teams Budget</h2>
+<ul id="teams"></ul><script>
+const socket = io();
+
+const teamNames = ["CSK","MI","RCB","KKR","SRH","DC","PBKS","RR","GT","LSG"];
+
+const btnDiv = document.getElementById('buttons');
+teamNames.forEach(t => {
+  const btn = document.createElement('button');
+  btn.innerText = t + " Bid";
+  btn.onclick = () => bid(t);
+  btnDiv.appendChild(btn);
+});
+
+socket.on('update', (data) => {
+  document.getElementById('player').innerText = data.currentPlayer.name;
+  document.getElementById('role').innerText =
+    "Role: " + data.currentPlayer.role + " | " + data.currentPlayer.country;
+  document.getElementById('bid').innerText = 'Bid: ' + data.currentPlayer.currentBid + ' Cr';
+  document.getElementById('team').innerText = 'Leading: ' + (data.currentPlayer.highestBidder || 'None');
+
+  let teamList = '';
+  for (let t in data.teams) {
+    teamList += `<li>${t}: ${data.teams[t].toFixed(1)} Cr</li>`;
+  }
+  document.getElementById('teams').innerHTML = teamList;
+});
+
+function bid(team) {
+  socket.emit('bid', team);
+}
+
+function sell() {
+  socket.emit('sell');
+}
+</script></body>
+</html>// ================= 3. players.json =================
+
+[ {"name":"Virat Kohli","role":"Batsman","base":2,"country":"India"}, {"name":"Rohit Sharma","role":"Batsman","base":2,"country":"India"}, {"name":"MS Dhoni","role":"WK","base":2,"country":"India"}, {"name":"Hardik Pandya","role":"All-rounder","base":2,"country":"India"}, {"name":"Jasprit Bumrah","role":"Bowler","base":2,"country":"India"}, {"name":"KL Rahul","role":"WK","base":2,"country":"India"}, {"name":"Shubman Gill","role":"Batsman","base":2,"country":"India"}, {"name":"Rishabh Pant","role":"WK","base":2,"country":"India"}, {"name":"Mohammed Siraj","role":"Bowler","base":2,"country":"India"}, {"name":"Yuzvendra Chahal","role":"Bowler","base":2,"country":"India"},
+
+{"name":"Jos Buttler","role":"WK","base":2,"country":"England"}, {"name":"Ben Stokes","role":"All-rounder","base":2,"country":"England"}, {"name":"Joe Root","role":"Batsman","base":2,"country":"England"}, {"name":"Jofra Archer","role":"Bowler","base":2,"country":"England"},
+
+{"name":"David Warner","role":"Batsman","base":2,"country":"Australia"}, {"name":"Pat Cummins","role":"Bowler","base":2,"country":"Australia"}, {"name":"Mitchell Starc","role":"Bowler","base":2,"country":"Australia"}, {"name":"Glenn Maxwell","role":"All-rounder","base":2,"country":"Australia"},
+
+{"name":"Kane Williamson","role":"Batsman","base":2,"country":"New Zealand"}, {"name":"Trent Boult","role":"Bowler","base":2,"country":"New Zealand"},
+
+{"name":"Rashid Khan","role":"Bowler","base":2,"country":"Afghanistan"}, {"name":"Andre Russell","role":"All-rounder","base":2,"country":"West Indies"} ]
+
+// ================= HOW TO RUN ================= // 1. Install Node.js // 2. npm init -y // 3. npm install express socket.io // 4. node server.js // 5. Open http://localhost:3000
+
+// Add more players in players.json anytime
